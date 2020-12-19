@@ -1,7 +1,8 @@
-use super::framed_write::FramedWrite2;
-use super::fuse::Fuse;
-use bytes::BytesMut;
 use std::io::Error;
+
+use bytes::BytesMut;
+
+use super::{framed_write::FramedWriteImpl, fuse::Fuse};
 
 /// Decoding of frames via buffers, for use with `FramedRead`.
 pub trait Decoder {
@@ -28,15 +29,15 @@ impl<T, U: Decoder> Decoder for Fuse<T, U> {
     type Error = U::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        self.u.decode(src)
+        self.codec.decode(src)
     }
 
     fn decode_eof(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        self.u.decode_eof(src)
+        self.codec.decode_eof(src)
     }
 }
 
-impl<T: Decoder> Decoder for FramedWrite2<T> {
+impl<T: Decoder> Decoder for FramedWriteImpl<T> {
     type Item = T::Item;
     type Error = T::Error;
 

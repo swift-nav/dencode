@@ -1,23 +1,19 @@
-use futures_util::io::{AsyncRead, AsyncWrite};
-use pin_project_lite::pin_project;
-use std::io::Error;
-use std::marker::Unpin;
-use std::ops::{Deref, DerefMut};
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::{
+    io,
+    ops::{Deref, DerefMut},
+};
 
-pin_project! {
-    #[derive(Debug)]
-    pub(crate) struct Fuse<T, U> {
-        #[pin]
-        pub t: T,
-        pub u: U,
-    }
+#[cfg_attr(feature = "async", pin_project::pin_project)]
+#[derive(Debug)]
+pub(crate) struct Fuse<T, U> {
+    #[cfg_attr(feature = "async", pin)]
+    pub(crate) io: T,
+    pub(crate) codec: U,
 }
 
 impl<T, U> Fuse<T, U> {
     pub(crate) fn new(t: T, u: U) -> Self {
-        Self { t, u }
+        Self { io: t, codec: u }
     }
 }
 
@@ -25,38 +21,81 @@ impl<T, U> Deref for Fuse<T, U> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        &self.t
+        &self.io
     }
 }
 
 impl<T, U> DerefMut for Fuse<T, U> {
     fn deref_mut(&mut self) -> &mut T {
-        &mut self.t
+        &mut self.io
     }
 }
 
-impl<T: AsyncRead + Unpin, U> AsyncRead for Fuse<T, U> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, Error>> {
-        self.project().t.poll_read(cx, buf)
+impl<T, U> io::Read for Fuse<T, U>
+where
+    T: io::Read,
+{
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.io.read(buf)
     }
 }
 
-impl<T: AsyncWrite + Unpin, U> AsyncWrite for Fuse<T, U> {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        buf: &[u8],
-    ) -> Poll<Result<usize, Error>> {
-        self.project().t.poll_write(cx, buf)
+impl<T, U> io::Write for Fuse<T, U>
+where
+    T: io::Write,
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.io.write(buf)
     }
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Error>> {
-        self.project().t.poll_flush(cx)
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.io.flush()
     }
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Error>> {
-        self.project().t.poll_close(cx)
+}
+
+#[cfg(feature = "async")]
+mod if_async {
+    use std::{
+        marker::Unpin,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
+    use futures_util::io::{AsyncRead, AsyncWrite};
+
+    use super::*;
+
+    impl<T, U> AsyncRead for Fuse<T, U>
+    where
+        T: AsyncRead + Unpin,
+    {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<io::Result<usize>> {
+            self.project().io.poll_read(cx, buf)
+        }
+    }
+
+    impl<T, U> AsyncWrite for Fuse<T, U>
+    where
+        T: AsyncWrite + Unpin,
+    {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            self.project().io.poll_write(cx, buf)
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            self.project().io.poll_flush(cx)
+        }
+
+        fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            self.project().io.poll_close(cx)
+        }
     }
 }

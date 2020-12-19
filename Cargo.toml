@@ -1,44 +1,43 @@
 [package]
-name = "futures_codec"
+name = "dencode"
 edition = "2018"
-version = "0.4.1"
-authors = ["Matt Hunzinger <matthunz2@gmail.com>"]
-description = "Utilities for encoding and decoding frames using `async/await`"
+version = "0.1.0"
+authors = [
+    "Swift Navigation <dev@swift-nav.com>",
+    "Matt Hunzinger <matthunz2@gmail.com>",
+]
+description = "Utilities for decoding and encoding frames from readers and writers."
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/matthunz/futures-codec"
-homepage = "https://github.com/matthunz/futures-codec"
-documentation = "https://docs.rs/crate/futures_codec"
-keywords = ["future", "futures", "async", "codec"]
-categories = ["asynchronous", "network-programming"]
+repository = "https://github.com/swift-nav/dencode"
+homepage = "https://github.com/swift-nav/dencode"
+documentation = "https://docs.rs/crate/dencode"
+keywords = ["decode", "encode", "codec"]
+categories = ["synchronous", "asynchronous", "network-programming"]
 
 [features]
-default = []
-json = [ "serde", "serde_json" ]
-cbor = [ "serde", "serde_cbor" ]
+default = ["async"]
+async = ["futures-sink", "futures-util", "pin-project"]
 
 [dependencies]
-bytes = "0.5.4"
-futures-sink = "0.3.7"
-futures-util = { version = "0.3.7", features = ["io"] }
-memchr = "2.3.4"
-pin-project-lite = "0.1.11"
+bytes = "1"
+
+[dependencies.pin-project]
+version = "1"
+optional = true
+
+[dependencies.futures-sink]
+version = "0.3"
+optional = true
+
+[dependencies.futures-util]
+version = "0.3"
+default-features = false
+features = ["io"]
+optional = true
 
 [dev-dependencies]
 futures = "0.3.7"
-
-[dependencies.serde]
-version = '1.0.113'
-optional = true
-features = [ "derive" ]
-
-[dependencies.serde_json]
-version = '1.0.55'
-optional = true
-
-[dependencies.serde_cbor]
-version = '0.11.1'
-optional = true
 
 [package.metadata.docs.rs]
 all-features = true

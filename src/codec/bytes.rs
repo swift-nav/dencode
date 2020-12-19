@@ -1,6 +1,8 @@
-use crate::{Decoder, Encoder};
-use bytes::{Bytes, BytesMut};
 use std::io::Error;
+
+use bytes::{Bytes, BytesMut};
+
+use crate::{Decoder, Encoder};
 
 /// A simple codec that ships bytes around
 ///
@@ -11,12 +13,12 @@ use std::io::Error;
 /// use bytes::Bytes;
 /// use futures::{SinkExt, TryStreamExt};
 /// use futures::io::Cursor;
-/// use futures_codec::{BytesCodec, Framed};
+/// use dencode::{BytesCodec, Framed};
 ///
 /// let mut buf = vec![];
 /// // Cursor implements AsyncRead and AsyncWrite
 /// let cur = Cursor::new(&mut buf);
-/// let mut framed = Framed::new(cur, BytesCodec);
+/// let mut framed = Framed::new(cur, BytesCodec {});
 ///
 /// framed.send(Bytes::from("Hello World!")).await?;
 ///
@@ -26,7 +28,8 @@ use std::io::Error;
 /// # Ok::<_, std::io::Error>(())
 /// # }).unwrap();
 /// ```
-pub struct BytesCodec;
+#[derive(Debug, Clone, Copy)]
+pub struct BytesCodec {}
 
 impl Encoder for BytesCodec {
     type Item = Bytes;

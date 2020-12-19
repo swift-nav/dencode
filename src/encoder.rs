@@ -1,6 +1,8 @@
-use super::fuse::Fuse;
-use bytes::BytesMut;
 use std::io::Error;
+
+use bytes::BytesMut;
+
+use super::fuse::Fuse;
 
 /// Encoding of messages as bytes, for use with `FramedWrite`.
 pub trait Encoder {
@@ -18,6 +20,6 @@ impl<T, U: Encoder> Encoder for Fuse<T, U> {
     type Error = U::Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        self.u.encode(item, dst)
+        self.codec.encode(item, dst)
     }
 }

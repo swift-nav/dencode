@@ -1,18 +1,23 @@
-#![deny(missing_docs)]
+#![deny(
+    clippy::all,
+    missing_docs,
+    missing_debug_implementations,
+    rust_2018_idioms,
+    unreachable_pub
+)]
 //! Utilities for encoding and decoding frames using `async/await`.
 //!
-//! Contains adapters to go from streams of bytes, [`AsyncRead`](futures::io::AsyncRead)
-//! and [`AsyncWrite`](futures::io::AsyncWrite), to framed streams implementing [`Sink`](futures::Sink) and [`Stream`](futures::Stream).
+//! Contains adapters to go from streams of bytes, [`AsyncRead`](futures-util::io::AsyncRead)
+//! and [`AsyncWrite`](futures-util::io::AsyncWrite), to framed streams implementing [`Sink`](futures-util::Sink) and [`Stream`](futures-util::Stream).
 //! Framed streams are also known as `transports`.
 //!
 //! ```
 //! # futures::executor::block_on(async move {
-//! use futures::TryStreamExt;
-//! use futures::io::Cursor;
-//! use futures_codec::{LinesCodec, Framed};
+//! use dencode::{Framed, LinesCodec};
+//! use futures::{io::Cursor, TryStreamExt};
 //!
 //! let io = Cursor::new(Vec::new());
-//! let mut framed = Framed::new(io, LinesCodec);
+//! let mut framed = Framed::new(io, LinesCodec {});
 //!
 //! while let Some(line) = framed.try_next().await? {
 //!     dbg!(line);
@@ -21,14 +26,10 @@
 //! # }).unwrap();
 //! ```
 
-mod codec;
-pub use bytes::{Bytes, BytesMut};
-pub use codec::{BytesCodec, LengthCodec, LinesCodec};
+pub use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-#[cfg(feature = "cbor")]
-pub use codec::{CborCodec, CborCodecError};
-#[cfg(feature = "json")]
-pub use codec::{JsonCodec, JsonCodecError};
+mod codec;
+pub use codec::{bytes::BytesCodec, lines::LinesCodec};
 
 mod decoder;
 pub use decoder::Decoder;
@@ -44,5 +45,8 @@ pub use framed_read::FramedRead;
 
 mod framed_write;
 pub use framed_write::FramedWrite;
+
+mod sink;
+pub use sink::{IterSink, IterSinkExt};
 
 mod fuse;
