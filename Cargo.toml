@@ -13,7 +13,7 @@ repository = "https://github.com/swift-nav/dencode"
 homepage = "https://github.com/swift-nav/dencode"
 documentation = "https://docs.rs/crate/dencode"
 keywords = ["decode", "encode", "codec"]
-categories = ["synchronous", "asynchronous", "network-programming"]
+categories = ["encoding", "asynchronous", "network-programming"]
 
 [features]
 default = ["async"]
