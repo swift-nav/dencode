@@ -51,7 +51,7 @@ pipeline {
                         gitPrep()
                         script {
                         sh("""#!/bin/bash -ex
-                            | cargo clippy -v --all-features --all-targets -- --deny warnings
+                            | cargo clippy --all-features --all-targets -- --deny warnings
                             """.stripMargin())
                         }
                     }
