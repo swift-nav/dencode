@@ -8,3 +8,5 @@ RUN echo "Create jenkins user"... \
 USER jenkins
 
 RUN rustup default nightly
+
+ENV RUSTC_WRAPPER=
