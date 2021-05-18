@@ -22,11 +22,10 @@ use crate::{Decoder, Encoder};
 #[derive(Debug, Clone, Copy)]
 pub struct LinesCodec {}
 
-impl Encoder for LinesCodec {
-    type Item = String;
+impl Encoder<String> for LinesCodec {
     type Error = Error;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: String, dst: &mut BytesMut) -> Result<(), Self::Error> {
         dst.reserve(item.len());
         dst.put(item.as_bytes());
         Ok(())
