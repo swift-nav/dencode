@@ -38,10 +38,7 @@ pub struct FramedWrite<T, E> {
     inner: FramedWriteImpl<Fuse<T, E>>,
 }
 
-impl<T, E> FramedWrite<T, E>
-where
-    E: Encoder,
-{
+impl<T, E> FramedWrite<T, E> {
     /// Creates a new `FramedWrite` transport with the given `Encoder`.
     pub fn new(inner: T, encoder: E) -> Self {
         Self {
@@ -129,14 +126,14 @@ impl<T, E> DerefMut for FramedWrite<T, E> {
     }
 }
 
-impl<T, E> IterSink<E::Item> for FramedWrite<T, E>
+impl<T, E, I> IterSink<I> for FramedWrite<T, E>
 where
     T: Write,
-    E: Encoder,
+    E: Encoder<I>,
 {
     type Error = E::Error;
 
-    fn start_send(&mut self, item: E::Item) -> Result<(), Self::Error> {
+    fn start_send(&mut self, item: I) -> Result<(), Self::Error> {
         self.inner.start_send(item)
     }
 
@@ -192,13 +189,13 @@ impl<T: Read> Read for FramedWriteImpl<T> {
     }
 }
 
-impl<T> IterSink<T::Item> for FramedWriteImpl<T>
+impl<T, I> IterSink<I> for FramedWriteImpl<T>
 where
-    T: Write + Encoder,
+    T: Write + Encoder<I>,
 {
     type Error = T::Error;
 
-    fn start_send(&mut self, item: T::Item) -> Result<(), Self::Error> {
+    fn start_send(&mut self, item: I) -> Result<(), Self::Error> {
         self.inner.encode(item, &mut self.buffer)
     }
 
@@ -246,10 +243,10 @@ mod if_async {
 
     use super::*;
 
-    impl<T, E> Sink<E::Item> for FramedWrite<T, E>
+    impl<T, E, I> Sink<I> for FramedWrite<T, E>
     where
         T: AsyncWrite + Unpin,
-        E: Encoder,
+        E: Encoder<I>,
     {
         type Error = E::Error;
 
@@ -257,7 +254,7 @@ mod if_async {
             self.project().inner.poll_ready(cx)
         }
 
-        fn start_send(self: Pin<&mut Self>, item: E::Item) -> Result<(), Self::Error> {
+        fn start_send(self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
             self.project().inner.start_send(item)
         }
 
@@ -280,9 +277,9 @@ mod if_async {
         }
     }
 
-    impl<T> Sink<T::Item> for FramedWriteImpl<T>
+    impl<T, I> Sink<I> for FramedWriteImpl<T>
     where
-        T: AsyncWrite + Encoder + Unpin,
+        T: AsyncWrite + Encoder<I> + Unpin,
     {
         type Error = T::Error;
 
@@ -304,7 +301,7 @@ mod if_async {
             Poll::Ready(Ok(()))
         }
 
-        fn start_send(mut self: Pin<&mut Self>, item: T::Item) -> Result<(), Self::Error> {
+        fn start_send(mut self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
             let this = &mut *self;
             this.inner.encode(item, &mut this.buffer)
         }

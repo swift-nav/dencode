@@ -54,10 +54,7 @@ impl<T, U> DerefMut for Framed<T, U> {
     }
 }
 
-impl<T, U> Framed<T, U>
-where
-    U: Decoder + Encoder,
-{
+impl<T, U> Framed<T, U> {
     /// Creates a new `Framed` transport with the given codec.
     /// A codec is a type which implements `Decoder` and `Encoder`.
     pub fn new(inner: T, codec: U) -> Self {
@@ -117,14 +114,14 @@ where
     }
 }
 
-impl<T, U> IterSink<U::Item> for Framed<T, U>
+impl<T, U, I> IterSink<I> for Framed<T, U>
 where
     T: Write,
-    U: Encoder,
+    U: Encoder<I>,
 {
     type Error = U::Error;
 
-    fn start_send(&mut self, item: U::Item) -> Result<(), Self::Error> {
+    fn start_send(&mut self, item: I) -> Result<(), Self::Error> {
         self.inner.start_send(item)
     }
 
@@ -165,10 +162,10 @@ mod if_async {
         }
     }
 
-    impl<T, U> Sink<U::Item> for Framed<T, U>
+    impl<T, U, I> Sink<I> for Framed<T, U>
     where
         T: AsyncWrite + Unpin,
-        U: Encoder,
+        U: Encoder<I>,
     {
         type Error = U::Error;
 
@@ -176,7 +173,7 @@ mod if_async {
             self.project().inner.poll_ready(cx)
         }
 
-        fn start_send(self: Pin<&mut Self>, item: U::Item) -> Result<(), Self::Error> {
+        fn start_send(self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
             self.project().inner.start_send(item)
         }
 
