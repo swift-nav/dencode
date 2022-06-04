@@ -310,7 +310,7 @@ mod if_async {
             let mut this = self.project();
 
             while !this.buffer.is_empty() {
-                let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, &this.buffer))?;
+                let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, this.buffer))?;
 
                 if num_write == 0 {
                     return Poll::Ready(Err(err_eof().into()));
