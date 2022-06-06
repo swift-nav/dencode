@@ -24,8 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        buffer: ["", "bytes", "bitvec", "bytes,bitvec"]
-        runtime: ["", "futures"]
+        include:
+          - features: ""
+          - features: "bytes"
+          - features: "bitvec"
+          - features: "bytes,bitvec"
+          - features: "futures"
+          - features: "futures,bytes"
+          - features: "futures,bitvec"
+          - features: "futures,bytes,bitvec"
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -33,4 +40,4 @@ jobs:
           profile: minimal
           toolchain: stable
           components: clippy
-      - run: cargo clippy --features ${{ join([matrix.buffer, matrix.runtime]) }} --all-targets -- --deny warnings
+      - run: cargo clippy --features ${{ matrix.features }} --all-targets -- --deny warnings

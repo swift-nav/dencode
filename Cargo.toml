@@ -16,7 +16,7 @@ keywords = ["decode", "encode", "codec"]
 categories = ["encoding", "asynchronous", "network-programming"]
 
 [features]
-default = ["futures", "bitvec", "bytes"]
+default = []
 futures = ["futures-core", "futures-io", "futures-sink", "pin-project-lite"]
 
 [dependencies]
