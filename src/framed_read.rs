@@ -3,12 +3,37 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use bytes::BytesMut;
-
-use crate::{fuse::Fuse, sink::IterSink, Decoder};
+use crate::{buffer::Buffer, fuse::Fuse, sink::IterSink, Decoder};
 
 const INITIAL_CAPACITY: usize = 8 * 1024;
 
+#[cfg(feature = "futures")]
+pin_project_lite::pin_project! {
+    /// A `Stream` of messages decoded from an `AsyncRead`.
+    ///
+    /// # Example
+    /// ```
+    /// use bytes::Bytes;
+    /// use dencode::{BytesCodec, FramedRead};
+    /// use futures::TryStreamExt;
+    ///
+    /// let buf = [3u8; 3];
+    /// let mut framed = FramedRead::new(&buf[..], BytesCodec {});
+    ///
+    /// # futures::executor::block_on(async move {
+    /// if let Some(bytes) = framed.try_next().await? {
+    ///     assert_eq!(bytes, Bytes::copy_from_slice(&buf[..]));
+    /// }
+    /// # Ok::<_, std::io::Error>(())
+    /// # }).unwrap();
+    /// ```
+    #[derive(Debug)]
+    pub struct FramedRead<T, D, B> {
+        #[pin]
+        inner: FramedReadImpl<Fuse<T, D>, B>,
+    }
+}
+#[cfg(not(feature = "futures"))]
 /// A `Stream` of messages decoded from an `AsyncRead`.
 ///
 /// # Example
@@ -28,13 +53,14 @@ const INITIAL_CAPACITY: usize = 8 * 1024;
 /// # }).unwrap();
 /// ```
 #[derive(Debug)]
-pub struct FramedRead<T, D> {
-    inner: FramedReadImpl<Fuse<T, D>>,
+pub struct FramedRead<T, D, B> {
+    inner: FramedReadImpl<Fuse<T, D>, B>,
 }
 
-impl<T, D> FramedRead<T, D>
+impl<T, D, B> FramedRead<T, D, B>
 where
-    D: Decoder,
+    D: Decoder<B>,
+    B: Buffer,
 {
     /// Creates a new `FramedRead` transport with the given `Decoder`.
     pub fn new(inner: T, decoder: D) -> Self {
@@ -75,12 +101,12 @@ where
     }
 
     /// Returns a reference to the read buffer.
-    pub fn buffer(&self) -> &BytesMut {
+    pub fn buffer(&self) -> &B {
         &self.inner.buffer
     }
 }
 
-impl<T, D> Deref for FramedRead<T, D> {
+impl<T, D, B> Deref for FramedRead<T, D, B> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -88,16 +114,17 @@ impl<T, D> Deref for FramedRead<T, D> {
     }
 }
 
-impl<T, D> DerefMut for FramedRead<T, D> {
+impl<T, D, B> DerefMut for FramedRead<T, D, B> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.inner
     }
 }
 
-impl<T, D> Iterator for FramedRead<T, D>
+impl<T, D, B> Iterator for FramedRead<T, D, B>
 where
     T: Read,
-    D: Decoder,
+    D: Decoder<B>,
+    B: Buffer,
 {
     type Item = Result<D::Item, D::Error>;
 
@@ -106,19 +133,30 @@ where
     }
 }
 
-#[cfg_attr(feature = "async", pin_project::pin_project)]
+#[cfg(feature = "futures")]
+pin_project_lite::pin_project! {
+    #[derive(Debug)]
+    pub(crate) struct FramedReadImpl<T, B> {
+        #[pin]
+        inner: T,
+        buffer: B,
+    }
+}
+#[cfg(not(feature = "futures"))]
 #[derive(Debug)]
-pub(crate) struct FramedReadImpl<T> {
-    #[cfg_attr(feature = "async", pin)]
+pub(crate) struct FramedReadImpl<T, B> {
     inner: T,
-    buffer: BytesMut,
+    buffer: B,
 }
 
-impl<T> FramedReadImpl<T> {
+impl<T, B> FramedReadImpl<T, B>
+where
+    B: Buffer,
+{
     pub(crate) fn new(inner: T) -> Self {
         Self {
             inner,
-            buffer: BytesMut::with_capacity(INITIAL_CAPACITY),
+            buffer: B::with_capacity(INITIAL_CAPACITY),
         }
     }
 
@@ -126,12 +164,12 @@ impl<T> FramedReadImpl<T> {
         self.inner
     }
 
-    pub(crate) fn buffer(&self) -> &BytesMut {
+    pub(crate) fn buffer(&self) -> &B {
         &self.buffer
     }
 }
 
-impl<T> Deref for FramedReadImpl<T> {
+impl<T, B> Deref for FramedReadImpl<T, B> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -139,15 +177,16 @@ impl<T> Deref for FramedReadImpl<T> {
     }
 }
 
-impl<T> DerefMut for FramedReadImpl<T> {
+impl<T, B> DerefMut for FramedReadImpl<T, B> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.inner
     }
 }
 
-impl<T> Iterator for FramedReadImpl<T>
+impl<T, B> Iterator for FramedReadImpl<T, B>
 where
-    T: Read + Decoder,
+    T: Read + Decoder<B>,
+    B: Buffer,
 {
     type Item = Result<T::Item, T::Error>;
 
@@ -178,7 +217,7 @@ where
     }
 }
 
-impl<T, I> IterSink<I> for FramedReadImpl<T>
+impl<T, B, I> IterSink<I> for FramedReadImpl<T, B>
 where
     T: IterSink<I>,
 {
@@ -197,44 +236,42 @@ where
     }
 }
 
-#[cfg(feature = "async")]
-mod if_async {
+#[cfg(feature = "futures")]
+mod futures_impl {
     use std::{
         io,
-        marker::Unpin,
         pin::Pin,
         task::{Context, Poll},
     };
 
+    use futures_core::{ready, Stream};
+    use futures_io::AsyncRead;
     use futures_sink::Sink;
-    use futures_util::{
-        io::AsyncRead,
-        ready,
-        stream::{Stream, TryStreamExt},
-    };
 
     use super::*;
 
-    impl<T, D> Stream for FramedRead<T, D>
+    impl<T, D, B> Stream for FramedRead<T, D, B>
     where
         T: AsyncRead + Unpin,
-        D: Decoder,
+        D: Decoder<B>,
+        B: Buffer,
     {
         type Item = Result<D::Item, D::Error>;
 
-        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            self.inner.try_poll_next_unpin(cx)
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            self.project().inner.poll_next(cx)
         }
     }
 
-    impl<T> Stream for FramedReadImpl<T>
+    impl<T, B> Stream for FramedReadImpl<T, B>
     where
-        T: AsyncRead + Decoder + Unpin,
+        T: AsyncRead + Decoder<B> + Unpin,
+        B: Buffer,
     {
         type Item = Result<T::Item, T::Error>;
 
-        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-            let this = &mut *self;
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let mut this = self.project();
 
             if let Some(item) = this.inner.decode(&mut this.buffer)? {
                 return Poll::Ready(Some(Ok(item)));
@@ -273,7 +310,7 @@ mod if_async {
         }
     }
 
-    impl<T, I> Sink<I> for FramedReadImpl<T>
+    impl<T, B, I> Sink<I> for FramedReadImpl<T, B>
     where
         T: Sink<I> + Unpin,
     {

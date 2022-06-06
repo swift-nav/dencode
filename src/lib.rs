@@ -1,6 +1,6 @@
 #![deny(
     clippy::all,
-    missing_docs,
+    // missing_docs,
     missing_debug_implementations,
     rust_2018_idioms,
     unreachable_pub
@@ -26,10 +26,8 @@
 //! # }).unwrap();
 //! ```
 
-pub use bytes::{Buf, BufMut, Bytes, BytesMut};
-
-mod codec;
-pub use codec::{bytes::BytesCodec, lines::LinesCodec};
+mod buffer;
+pub use buffer::Buffer;
 
 mod decoder;
 pub use decoder::Decoder;
@@ -46,7 +44,37 @@ pub use framed_read::FramedRead;
 mod framed_write;
 pub use framed_write::FramedWrite;
 
+mod fuse;
+
 mod sink;
 pub use sink::{IterSink, IterSinkExt};
 
-mod fuse;
+#[derive(Debug)]
+pub struct LinesCodec {}
+
+impl Encoder<&str, Vec<u8>> for LinesCodec {
+    type Error = std::io::Error;
+
+    fn encode(&mut self, item: &str, dst: &mut Vec<u8>) -> Result<(), Self::Error> {
+        dst.extend_from_slice(item.as_bytes());
+        dst.push(b'\n');
+        Ok(())
+    }
+}
+
+impl Decoder<Vec<u8>> for LinesCodec {
+    type Item = String;
+    type Error = std::io::Error;
+
+    fn decode(&mut self, src: &mut Vec<u8>) -> Result<Option<Self::Item>, Self::Error> {
+        match src.iter().position(|b| *b == b'\n') {
+            Some(pos) => {
+                let buf = src.drain(..pos + 1).collect();
+                String::from_utf8(buf)
+                    .map(Some)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            }
+            _ => Ok(None),
+        }
+    }
+}

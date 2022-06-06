@@ -1,0 +1,36 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - "main"
+jobs:
+  ci:
+    name: Format, lint, and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
+      - run: cargo fmt -- --check
+      - run: cargo clippy --all-features -- --deny warnings
+      - run: cargo test --all-features
+
+  features:
+    name: Check feature combinations
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        buffer: ["", "bytes", "bitvec", "bytes,bitvec"]
+        runtime: ["", "futures"]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy
+      - run: cargo clippy --features ${{ join([matrix.buffer, matrix.runtime]) }} --all-targets -- --deny warnings

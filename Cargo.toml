@@ -1,7 +1,7 @@
 [package]
 name = "dencode"
 edition = "2021"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
     "Swift Navigation <dev@swift-nav.com>",
     "Matt Hunzinger <matthunz2@gmail.com>",
@@ -16,27 +16,20 @@ keywords = ["decode", "encode", "codec"]
 categories = ["encoding", "asynchronous", "network-programming"]
 
 [features]
-default = ["async"]
-async = ["futures-sink", "futures-util", "pin-project"]
+default = ["futures", "bitvec", "bytes"]
+futures = ["futures-core", "futures-io", "futures-sink", "pin-project-lite"]
 
 [dependencies]
-bytes = "1"
-
-[dependencies.pin-project]
-version = "1"
-optional = true
-
-[dependencies.futures-sink]
-version = "0.3"
-optional = true
-
-[dependencies.futures-util]
-version = "0.3"
-default-features = false
-features = ["io"]
-optional = true
+bitvec = { version = "1", optional = true }
+bytes = { version = "1", optional = true }
+futures-core = { version = "0.3.21", optional = true }
+futures-io = { version = "0.3.21", optional = true }
+futures-sink = { version = "0.3", optional = true }
+pin-project-lite = { version = "0.2.9", optional = true }
 
 [dev-dependencies]
+bitvec = "1"
+bytes = "1"
 futures = "0.3.7"
 
 [package.metadata.docs.rs]

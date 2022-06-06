@@ -4,7 +4,8 @@ use std::{
     task::{Context, Poll},
 };
 
-use dencode::{Bytes, BytesCodec, FramedWrite, IterSinkExt, LinesCodec};
+use bytes::Bytes;
+use dencode::{FramedWrite, IterSinkExt, LinesCodec};
 use futures::{
     executor,
     io::{AsyncWrite, Cursor},
@@ -13,10 +14,12 @@ use futures::{
     stream::StreamExt,
 };
 
+use crate::BytesCodec;
+
 // An iterator which outputs a single zero byte up to limit times
 struct ZeroBytes {
-    pub count: usize,
-    pub limit: usize,
+    count: usize,
+    limit: usize,
 }
 
 impl Iterator for ZeroBytes {
@@ -34,10 +37,10 @@ impl Iterator for ZeroBytes {
 // An AsyncWrite which is always ready and just consumes the data
 struct WriteNull {
     // number of poll_write calls
-    pub num_poll_write: usize,
+    num_poll_write: usize,
 
     // size of the last poll_write
-    pub last_write_size: usize,
+    last_write_size: usize,
 }
 
 impl AsyncWrite for WriteNull {
@@ -76,8 +79,8 @@ impl io::Write for WriteNull {
 fn line_write() {
     let curs = Cursor::new(vec![0u8; 16]);
     let mut framer = FramedWrite::new(curs, LinesCodec {});
-    executor::block_on(framer.send("Hello\n".to_owned())).unwrap();
-    executor::block_on(framer.send("World\n".to_owned())).unwrap();
+    executor::block_on(framer.send("Hello\n")).unwrap();
+    executor::block_on(framer.send("World\n")).unwrap();
     let (curs, _) = framer.release();
     assert_eq!(&curs.get_ref()[0..12], b"Hello\nWorld\n");
     assert_eq!(curs.position(), 12);
@@ -87,8 +90,8 @@ fn line_write() {
 fn blocking_line_write() {
     let curs = std::io::Cursor::new(vec![0u8; 16]);
     let mut framer = FramedWrite::new(curs, LinesCodec {});
-    framer.send("Hello\n".to_owned()).unwrap();
-    framer.send("World\n".to_owned()).unwrap();
+    framer.send("Hello\n").unwrap();
+    framer.send("World\n").unwrap();
     let (curs, _) = framer.release();
     assert_eq!(&curs.get_ref()[0..12], b"Hello\nWorld\n");
     assert_eq!(curs.position(), 12);
@@ -99,8 +102,7 @@ fn line_write_to_eof() {
     let mut buf = [0u8; 16];
     let curs = Cursor::new(&mut buf[..]);
     let mut framer = FramedWrite::new(curs, LinesCodec {});
-    let _err =
-        executor::block_on(framer.send("This will fill up the buffer\n".to_owned())).unwrap_err();
+    let _err = executor::block_on(framer.send("This will fill up the buffer\n")).unwrap_err();
     let (curs, _) = framer.release();
     assert_eq!(curs.position(), 16);
     assert_eq!(&curs.get_ref()[0..16], b"This will fill u");
@@ -111,9 +113,7 @@ fn blocking_write_to_eof() {
     let mut buf = [0u8; 16];
     let curs = std::io::Cursor::new(&mut buf[..]);
     let mut framer = FramedWrite::new(curs, LinesCodec {});
-    let _err = framer
-        .send("This will fill up the buffer\n".to_owned())
-        .unwrap_err();
+    let _err = framer.send("This will fill up the buffer\n").unwrap_err();
     let (curs, _) = framer.release();
     assert_eq!(curs.position(), 16);
     assert_eq!(&curs.get_ref()[0..16], b"This will fill u");
