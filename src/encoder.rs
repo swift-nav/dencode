@@ -4,7 +4,7 @@ use super::fuse::Fuse;
 use crate::Buffer;
 
 /// Encoding of messages as bytes, for use with `FramedWrite`.
-pub trait Encoder<Item, Buf>
+pub trait Encoder<Buf, Item>
 where
     Buf: Buffer,
 {
@@ -15,12 +15,12 @@ where
     fn encode(&mut self, item: Item, dst: &mut Buf) -> Result<(), Self::Error>;
 }
 
-impl<T, Item, Buf, U> Encoder<Item, Buf> for Fuse<T, U>
+impl<Io, Codec, Buf, Item> Encoder<Buf, Item> for Fuse<Io, Codec>
 where
     Buf: Buffer,
-    U: Encoder<Item, Buf>,
+    Codec: Encoder<Buf, Item>,
 {
-    type Error = U::Error;
+    type Error = Codec::Error;
 
     fn encode(&mut self, item: Item, dst: &mut Buf) -> Result<(), Self::Error> {
         self.codec.encode(item, dst)

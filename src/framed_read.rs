@@ -27,9 +27,9 @@ pin_project_lite::pin_project! {
     /// # }).unwrap();
     /// ```
     #[derive(Debug)]
-    pub struct FramedRead<T, D, B> {
+    pub struct FramedRead<Io, Codec, Buf> {
         #[pin]
-        inner: FramedReadImpl<Fuse<T, D>, B>,
+        inner: FramedReadImpl<Fuse<Io, Codec>, Buf>,
     }
 }
 #[cfg(not(feature = "futures"))]
@@ -51,24 +51,24 @@ pin_project_lite::pin_project! {
 /// # }).unwrap();
 /// ```
 #[derive(Debug)]
-pub struct FramedRead<T, D, B> {
-    inner: FramedReadImpl<Fuse<T, D>, B>,
+pub struct FramedRead<Io, Codec, Buf> {
+    inner: FramedReadImpl<Fuse<Io, Codec>, Buf>,
 }
 
-impl<T, D, B> FramedRead<T, D, B>
+impl<Io, Codec, Buf> FramedRead<Io, Codec, Buf>
 where
-    D: Decoder<B>,
-    B: Buffer,
+    Codec: Decoder<Buf>,
+    Buf: Buffer,
 {
     /// Creates a new `FramedRead` transport with the given `Decoder`.
-    pub fn new(inner: T, decoder: D) -> Self {
+    pub fn new(inner: Io, decoder: Codec) -> Self {
         Self {
             inner: FramedReadImpl::new(Fuse::new(inner, decoder)),
         }
     }
 
     /// Release the I/O and Decoder
-    pub fn release(self) -> (T, D) {
+    pub fn release(self) -> (Io, Codec) {
         let fuse = self.inner.release();
         (fuse.io, fuse.codec)
     }
@@ -78,7 +78,7 @@ where
     /// Note that care should be taken to not tamper with the underlying stream
     /// of data coming in as it may corrupt the stream of frames otherwise
     /// being worked with.
-    pub fn into_inner(self) -> T {
+    pub fn into_inner(self) -> Io {
         self.release().0
     }
 
@@ -86,7 +86,7 @@ where
     ///
     /// Note that care should be taken to not tamper with the underlying decoder
     /// as it may corrupt the stream of frames otherwise being worked with.
-    pub fn decoder(&self) -> &D {
+    pub fn decoder(&self) -> &Codec {
         &self.inner.codec
     }
 
@@ -94,37 +94,37 @@ where
     ///
     /// Note that care should be taken to not tamper with the underlying decoder
     /// as it may corrupt the stream of frames otherwise being worked with.
-    pub fn decoder_mut(&mut self) -> &mut D {
+    pub fn decoder_mut(&mut self) -> &mut Codec {
         &mut self.inner.codec
     }
 
     /// Returns a reference to the read buffer.
-    pub fn buffer(&self) -> &B {
+    pub fn buffer(&self) -> &Buf {
         &self.inner.buffer
     }
 }
 
-impl<T, D, B> Deref for FramedRead<T, D, B> {
-    type Target = T;
+impl<Io, Codec, Buf> Deref for FramedRead<Io, Codec, Buf> {
+    type Target = Io;
 
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &Io {
         &self.inner
     }
 }
 
-impl<T, D, B> DerefMut for FramedRead<T, D, B> {
-    fn deref_mut(&mut self) -> &mut T {
+impl<Io, Codec, Buf> DerefMut for FramedRead<Io, Codec, Buf> {
+    fn deref_mut(&mut self) -> &mut Io {
         &mut self.inner
     }
 }
 
-impl<T, D, B> Iterator for FramedRead<T, D, B>
+impl<Io, Codec, Buf> Iterator for FramedRead<Io, Codec, Buf>
 where
-    T: Read,
-    D: Decoder<B>,
-    B: Buffer,
+    Io: Read,
+    Codec: Decoder<Buf>,
+    Buf: Buffer,
 {
-    type Item = Result<D::Item, D::Error>;
+    type Item = Result<Codec::Item, Codec::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()
@@ -134,59 +134,59 @@ where
 #[cfg(feature = "futures")]
 pin_project_lite::pin_project! {
     #[derive(Debug)]
-    pub(crate) struct FramedReadImpl<T, B> {
+    pub(crate) struct FramedReadImpl<Fuse, Buf> {
         #[pin]
-        inner: T,
-        buffer: B,
+        inner: Fuse,
+        buffer: Buf,
     }
 }
 #[cfg(not(feature = "futures"))]
 #[derive(Debug)]
-pub(crate) struct FramedReadImpl<T, B> {
-    inner: T,
-    buffer: B,
+pub(crate) struct FramedReadImpl<Fuse, Buf> {
+    inner: Fuse,
+    buffer: Buf,
 }
 
-impl<T, B> FramedReadImpl<T, B>
+impl<Fuse, Buf> FramedReadImpl<Fuse, Buf>
 where
-    B: Buffer,
+    Buf: Buffer,
 {
-    pub(crate) fn new(inner: T) -> Self {
+    pub(crate) fn new(inner: Fuse) -> Self {
         Self {
             inner,
-            buffer: B::with_capacity(INITIAL_CAPACITY),
+            buffer: Buf::with_capacity(INITIAL_CAPACITY),
         }
     }
 
-    pub(crate) fn release(self) -> T {
+    pub(crate) fn release(self) -> Fuse {
         self.inner
     }
 
-    pub(crate) fn buffer(&self) -> &B {
+    pub(crate) fn buffer(&self) -> &Buf {
         &self.buffer
     }
 }
 
-impl<T, B> Deref for FramedReadImpl<T, B> {
-    type Target = T;
+impl<Fuse, Buf> Deref for FramedReadImpl<Fuse, Buf> {
+    type Target = Fuse;
 
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &Fuse {
         &self.inner
     }
 }
 
-impl<T, B> DerefMut for FramedReadImpl<T, B> {
-    fn deref_mut(&mut self) -> &mut T {
+impl<Fuse, Buf> DerefMut for FramedReadImpl<Fuse, Buf> {
+    fn deref_mut(&mut self) -> &mut Fuse {
         &mut self.inner
     }
 }
 
-impl<T, B> Iterator for FramedReadImpl<T, B>
+impl<Fuse, Buf> Iterator for FramedReadImpl<Fuse, Buf>
 where
-    T: Read + Decoder<B>,
-    B: Buffer,
+    Fuse: Read + Decoder<Buf>,
+    Buf: Buffer,
 {
-    type Item = Result<T::Item, T::Error>;
+    type Item = Result<Fuse::Item, Fuse::Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.inner.decode(&mut self.buffer) {
@@ -194,17 +194,13 @@ where
             Err(e) => return Some(Err(e)),
             Ok(None) => (),
         };
-
         let mut buf = [0u8; INITIAL_CAPACITY];
-
         loop {
             let n = match self.inner.read(&mut buf) {
                 Ok(n) => n,
                 Err(e) => return Some(Err(e.into())),
             };
-
             self.buffer.extend_from_slice(&buf[..n]);
-
             match self.inner.decode(&mut self.buffer) {
                 Ok(Some(item)) => return Some(Ok(item)),
                 Ok(None) if n == 0 => return None,
@@ -215,13 +211,13 @@ where
     }
 }
 
-impl<T, B, I> IterSink<I> for FramedReadImpl<T, B>
+impl<Fuse, Buf, Item> IterSink<Item> for FramedReadImpl<Fuse, Buf>
 where
-    T: IterSink<I>,
+    Fuse: IterSink<Item>,
 {
-    type Error = T::Error;
+    type Error = Fuse::Error;
 
-    fn start_send(&mut self, item: I) -> Result<(), Self::Error> {
+    fn start_send(&mut self, item: Item) -> Result<(), Self::Error> {
         self.inner.start_send(item)
     }
 
@@ -248,41 +244,36 @@ mod futures_impl {
 
     use super::*;
 
-    impl<T, D, B> Stream for FramedRead<T, D, B>
+    impl<Io, Codec, Buf> Stream for FramedRead<Io, Codec, Buf>
     where
-        T: AsyncRead + Unpin,
-        D: Decoder<B>,
-        B: Buffer,
+        Io: AsyncRead + Unpin,
+        Codec: Decoder<Buf>,
+        Buf: Buffer,
     {
-        type Item = Result<D::Item, D::Error>;
+        type Item = Result<Codec::Item, Codec::Error>;
 
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             self.project().inner.poll_next(cx)
         }
     }
 
-    impl<T, B> Stream for FramedReadImpl<T, B>
+    impl<Fuse, Buf> Stream for FramedReadImpl<Fuse, Buf>
     where
-        T: AsyncRead + Decoder<B> + Unpin,
-        B: Buffer,
+        Fuse: AsyncRead + Decoder<Buf> + Unpin,
+        Buf: Buffer,
     {
-        type Item = Result<T::Item, T::Error>;
+        type Item = Result<Fuse::Item, Fuse::Error>;
 
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             let mut this = self.project();
-
             if let Some(item) = this.inner.decode(this.buffer)? {
                 return Poll::Ready(Some(Ok(item)));
             }
-
             let mut buf = [0u8; INITIAL_CAPACITY];
-
             loop {
                 let n = ready!(Pin::new(&mut this.inner).poll_read(cx, &mut buf))?;
                 this.buffer.extend_from_slice(&buf[..n]);
-
                 let ended = n == 0;
-
                 match this.inner.decode(this.buffer)? {
                     Some(item) => return Poll::Ready(Some(Ok(item))),
                     None if ended => {
@@ -308,16 +299,16 @@ mod futures_impl {
         }
     }
 
-    impl<T, B, I> Sink<I> for FramedReadImpl<T, B>
+    impl<Fuse, Buf, Item> Sink<Item> for FramedReadImpl<Fuse, Buf>
     where
-        T: Sink<I> + Unpin,
+        Fuse: Sink<Item> + Unpin,
     {
-        type Error = T::Error;
+        type Error = Fuse::Error;
 
         fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             self.project().inner.poll_ready(cx)
         }
-        fn start_send(self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
+        fn start_send(self: Pin<&mut Self>, item: Item) -> Result<(), Self::Error> {
             self.project().inner.start_send(item)
         }
         fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

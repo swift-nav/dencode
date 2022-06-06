@@ -52,7 +52,7 @@ pub use sink::{IterSink, IterSinkExt};
 #[derive(Debug)]
 pub struct LinesCodec {}
 
-impl Encoder<&str, Vec<u8>> for LinesCodec {
+impl Encoder<Vec<u8>, &str> for LinesCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: &str, dst: &mut Vec<u8>) -> Result<(), Self::Error> {

@@ -30,7 +30,7 @@ pin-project-lite = { version = "0.2", optional = true }
 [dev-dependencies]
 bitvec = "1"
 bytes = "1"
-futures = "0.3.7"
+futures = "0.3"
 
 [package.metadata.docs.rs]
 all-features = true

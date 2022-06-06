@@ -9,7 +9,7 @@ use dencode::{Decoder, Encoder};
 
 pub struct BytesCodec {}
 
-impl Encoder<Bytes, BytesMut> for BytesCodec {
+impl Encoder<BytesMut, Bytes> for BytesCodec {
     type Error = io::Error;
 
     fn encode(&mut self, src: Bytes, dst: &mut BytesMut) -> Result<(), Self::Error> {

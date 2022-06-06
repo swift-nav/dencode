@@ -148,7 +148,7 @@ where
 impl<Io, Codec, Buf, Item> IterSink<Item> for Framed<Io, Codec, Buf>
 where
     Io: Write,
-    Codec: Encoder<Item, Buf>,
+    Codec: Encoder<Buf, Item>,
     Buf: Buffer,
 {
     type Error = Codec::Error;
@@ -195,7 +195,7 @@ mod futures_impl {
     impl<Io, Codec, Buf, Item> Sink<Item> for Framed<Io, Codec, Buf>
     where
         Io: AsyncWrite + Unpin,
-        Codec: Encoder<Item, Buf>,
+        Codec: Encoder<Buf, Item>,
         Buf: Buffer,
     {
         type Error = Codec::Error;

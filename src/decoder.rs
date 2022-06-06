@@ -26,13 +26,13 @@ where
     }
 }
 
-impl<Buf, T, U> Decoder<Buf> for Fuse<T, U>
+impl<Buf, Io, Codec> Decoder<Buf> for Fuse<Io, Codec>
 where
     Buf: Buffer,
-    U: Decoder<Buf>,
+    Codec: Decoder<Buf>,
 {
-    type Item = U::Item;
-    type Error = U::Error;
+    type Item = Codec::Item;
+    type Error = Codec::Error;
 
     fn decode(&mut self, src: &mut Buf) -> Result<Option<Self::Item>, Self::Error> {
         self.codec.decode(src)
