@@ -3,10 +3,18 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-#[cfg_attr(feature = "async", pin_project::pin_project)]
+#[cfg(feature = "futures")]
+pin_project_lite::pin_project! {
+    #[derive(Debug)]
+    pub(crate) struct Fuse<T, U> {
+        #[pin]
+        pub(crate) io: T,
+        pub(crate) codec: U,
+    }
+}
+#[cfg(not(feature = "futures"))]
 #[derive(Debug)]
 pub(crate) struct Fuse<T, U> {
-    #[cfg_attr(feature = "async", pin)]
     pub(crate) io: T,
     pub(crate) codec: U,
 }
@@ -53,15 +61,14 @@ where
     }
 }
 
-#[cfg(feature = "async")]
-mod if_async {
+#[cfg(feature = "futures")]
+mod futures_impl {
     use std::{
-        marker::Unpin,
         pin::Pin,
         task::{Context, Poll},
     };
 
-    use futures_util::io::{AsyncRead, AsyncWrite};
+    use futures_io::{AsyncRead, AsyncWrite};
 
     use super::*;
 

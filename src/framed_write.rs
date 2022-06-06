@@ -4,43 +4,68 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use bytes::{Buf, BytesMut};
-
-use crate::{fuse::Fuse, sink::IterSink, Encoder};
+use crate::{fuse::Fuse, sink::IterSink, Buffer, Encoder};
 
 // 2^17 bytes, which is slightly over 60% of the default
 // TCP send buffer size (SO_SNDBUF)
 const DEFAULT_SEND_HIGH_WATER_MARK: usize = 131072;
 
+#[cfg(feature = "futures")]
+pin_project_lite::pin_project! {
+    /// A `Sink` of frames encoded to an `AsyncWrite`.
+    ///
+    /// # Example
+    /// ```
+    /// use dencode::{LinesCodec, FramedWrite};
+    /// use futures::SinkExt;
+    ///
+    /// # futures::executor::block_on(async move {
+    /// let mut buf = Vec::new();
+    /// let mut framed = FramedWrite::new(&mut buf, LinesCodec {});
+    ///
+    /// let item = "hello";
+    /// framed.send(item).await?;
+    ///
+    /// assert_eq!(&buf[..], "hello\n".as_bytes());
+    /// # Ok::<_, std::io::Error>(())
+    /// # }).unwrap();
+    /// ```
+    #[derive(Debug)]
+    pub struct FramedWrite<Io, Codec, Buf> {
+        #[pin]
+        inner: FramedWriteImpl<Fuse<Io, Codec>, Buf>,
+    }
+}
+#[cfg(not(feature = "futures"))]
 /// A `Sink` of frames encoded to an `AsyncWrite`.
 ///
 /// # Example
 /// ```
-/// use bytes::Bytes;
-/// use dencode::{BytesCodec, FramedWrite};
+/// use dencode::{FramedWrite, LinesCodec};
 /// use futures::SinkExt;
 ///
 /// # futures::executor::block_on(async move {
 /// let mut buf = Vec::new();
-/// let mut framed = FramedWrite::new(&mut buf, BytesCodec {});
+/// let mut framed = FramedWrite::new(&mut buf, LinesCodec {});
 ///
-/// let bytes = Bytes::from("Hello World!");
-/// framed.send(bytes.clone()).await?;
+/// let item = "hello";
+/// framed.send(item).await?;
 ///
-/// assert_eq!(&buf[..], &bytes[..]);
+/// assert_eq!(&buf[..], "hello\n".as_bytes());
 /// # Ok::<_, std::io::Error>(())
 /// # }).unwrap();
 /// ```
-#[cfg_attr(feature = "async", pin_project::pin_project)]
 #[derive(Debug)]
-pub struct FramedWrite<T, E> {
-    #[cfg_attr(feature = "async", pin)]
-    inner: FramedWriteImpl<Fuse<T, E>>,
+pub struct FramedWrite<Io, Codec, Buf> {
+    inner: FramedWriteImpl<Fuse<Io, Codec>, Buf>,
 }
 
-impl<T, E> FramedWrite<T, E> {
+impl<Io, Codec, Buf> FramedWrite<Io, Codec, Buf>
+where
+    Buf: Buffer,
+{
     /// Creates a new `FramedWrite` transport with the given `Encoder`.
-    pub fn new(inner: T, encoder: E) -> Self {
+    pub fn new(inner: Io, encoder: Codec) -> Self {
         Self {
             inner: FramedWriteImpl::new(Fuse::new(inner, encoder)),
         }
@@ -81,7 +106,7 @@ impl<T, E> FramedWrite<T, E> {
     }
 
     /// Release the I/O and Encoder
-    pub fn release(self) -> (T, E) {
+    pub fn release(self) -> (Io, Codec) {
         let fuse = self.inner.release();
         (fuse.io, fuse.codec)
     }
@@ -91,7 +116,7 @@ impl<T, E> FramedWrite<T, E> {
     /// Note that care should be taken to not tamper with the underlying stream
     /// of data coming in as it may corrupt the stream of frames otherwise
     /// being worked with.
-    pub fn into_inner(self) -> T {
+    pub fn into_inner(self) -> Io {
         self.release().0
     }
 
@@ -99,7 +124,7 @@ impl<T, E> FramedWrite<T, E> {
     ///
     /// Note that care should be taken to not tamper with the underlying encoder
     /// as it may corrupt the stream of frames otherwise being worked with.
-    pub fn encoder(&self) -> &E {
+    pub fn encoder(&self) -> &Codec {
         &self.inner.codec
     }
 
@@ -107,33 +132,34 @@ impl<T, E> FramedWrite<T, E> {
     ///
     /// Note that care should be taken to not tamper with the underlying encoder
     /// as it may corrupt the stream of frames otherwise being worked with.
-    pub fn encoder_mut(&mut self) -> &mut E {
+    pub fn encoder_mut(&mut self) -> &mut Codec {
         &mut self.inner.codec
     }
 }
 
-impl<T, E> Deref for FramedWrite<T, E> {
-    type Target = T;
+impl<Io, Codec, Buf> Deref for FramedWrite<Io, Codec, Buf> {
+    type Target = Io;
 
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &Io {
         &self.inner
     }
 }
 
-impl<T, E> DerefMut for FramedWrite<T, E> {
-    fn deref_mut(&mut self) -> &mut T {
+impl<Io, Codec, Buf> DerefMut for FramedWrite<Io, Codec, Buf> {
+    fn deref_mut(&mut self) -> &mut Io {
         &mut self.inner
     }
 }
 
-impl<T, E, I> IterSink<I> for FramedWrite<T, E>
+impl<Io, Codec, Buf, Item> IterSink<Item> for FramedWrite<Io, Codec, Buf>
 where
-    T: Write,
-    E: Encoder<I>,
+    Io: Write,
+    Codec: Encoder<Buf, Item>,
+    Buf: Buffer,
 {
-    type Error = E::Error;
+    type Error = Codec::Error;
 
-    fn start_send(&mut self, item: I) -> Result<(), Self::Error> {
+    fn start_send(&mut self, item: Item) -> Result<(), Self::Error> {
         self.inner.start_send(item)
     }
 
@@ -146,62 +172,75 @@ where
     }
 }
 
-#[cfg_attr(feature = "async", pin_project::pin_project)]
+#[cfg(feature = "futures")]
+pin_project_lite::pin_project! {
+    #[derive(Debug)]
+    pub(crate) struct FramedWriteImpl<Fuse, Buf> {
+        #[pin]
+        pub(crate) inner: Fuse,
+        pub(crate) high_water_mark: usize,
+        buffer: Buf,
+    }
+}
+#[cfg(not(feature = "futures"))]
 #[derive(Debug)]
-pub(crate) struct FramedWriteImpl<T> {
-    #[cfg_attr(feature = "async", pin)]
-    pub(crate) inner: T,
+pub(crate) struct FramedWriteImpl<Fuse, Buf> {
+    pub(crate) inner: Fuse,
     pub(crate) high_water_mark: usize,
-    buffer: BytesMut,
+    buffer: Buf,
 }
 
-impl<T> FramedWriteImpl<T> {
-    pub(crate) fn new(inner: T) -> FramedWriteImpl<T> {
+impl<Fuse, Buf> FramedWriteImpl<Fuse, Buf>
+where
+    Buf: Buffer,
+{
+    pub(crate) fn new(inner: Fuse) -> FramedWriteImpl<Fuse, Buf> {
         FramedWriteImpl {
             inner,
             high_water_mark: DEFAULT_SEND_HIGH_WATER_MARK,
-            buffer: BytesMut::with_capacity(1028 * 8),
+            buffer: Buf::with_capacity(1028 * 8),
         }
     }
 
-    pub(crate) fn release(self) -> T {
+    pub(crate) fn release(self) -> Fuse {
         self.inner
     }
 }
 
-impl<T> Deref for FramedWriteImpl<T> {
-    type Target = T;
+impl<Fuse, Buf> Deref for FramedWriteImpl<Fuse, Buf> {
+    type Target = Fuse;
 
-    fn deref(&self) -> &T {
+    fn deref(&self) -> &Fuse {
         &self.inner
     }
 }
 
-impl<T> DerefMut for FramedWriteImpl<T> {
-    fn deref_mut(&mut self) -> &mut T {
+impl<Fuse, Buf> DerefMut for FramedWriteImpl<Fuse, Buf> {
+    fn deref_mut(&mut self) -> &mut Fuse {
         &mut self.inner
     }
 }
 
-impl<T: Read> Read for FramedWriteImpl<T> {
+impl<Fuse: Read, Buf> Read for FramedWriteImpl<Fuse, Buf> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.inner.read(buf)
     }
 }
 
-impl<T, I> IterSink<I> for FramedWriteImpl<T>
+impl<Fuse, Buf, Item> IterSink<Item> for FramedWriteImpl<Fuse, Buf>
 where
-    T: Write + Encoder<I>,
+    Fuse: Write + Encoder<Buf, Item>,
+    Buf: Buffer,
 {
-    type Error = T::Error;
+    type Error = Fuse::Error;
 
-    fn start_send(&mut self, item: I) -> Result<(), Self::Error> {
+    fn start_send(&mut self, item: Item) -> Result<(), Self::Error> {
         self.inner.encode(item, &mut self.buffer)
     }
 
     fn flush(&mut self) -> Result<(), Self::Error> {
         while !self.buffer.is_empty() {
-            let num_write = self.inner.write(&self.buffer)?;
+            let num_write = self.inner.write(self.buffer.as_slice())?;
 
             if num_write == 0 {
                 return Err(err_eof().into());
@@ -215,7 +254,7 @@ where
 
     fn ready(&mut self) -> Result<(), Self::Error> {
         while self.buffer.len() >= self.high_water_mark {
-            let num_write = self.inner.write(&self.buffer)?;
+            let num_write = self.inner.write(self.buffer.as_slice())?;
 
             if num_write == 0 {
                 return Err(err_eof().into());
@@ -227,34 +266,32 @@ where
     }
 }
 
-#[cfg(feature = "async")]
-mod if_async {
+#[cfg(feature = "futures")]
+mod futures_impl {
     use std::{
-        marker::Unpin,
         pin::Pin,
         task::{Context, Poll},
     };
 
+    use futures_core::ready;
+    use futures_io::{AsyncRead, AsyncWrite};
     use futures_sink::Sink;
-    use futures_util::{
-        io::{AsyncRead, AsyncWrite},
-        ready,
-    };
 
     use super::*;
 
-    impl<T, E, I> Sink<I> for FramedWrite<T, E>
+    impl<Io, Codec, Buf, Item> Sink<Item> for FramedWrite<Io, Codec, Buf>
     where
-        T: AsyncWrite + Unpin,
-        E: Encoder<I>,
+        Io: AsyncWrite + Unpin,
+        Codec: Encoder<Buf, Item>,
+        Buf: Buffer,
     {
-        type Error = E::Error;
+        type Error = Codec::Error;
 
         fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             self.project().inner.poll_ready(cx)
         }
 
-        fn start_send(self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
+        fn start_send(self: Pin<&mut Self>, item: Item) -> Result<(), Self::Error> {
             self.project().inner.start_send(item)
         }
 
@@ -267,7 +304,7 @@ mod if_async {
         }
     }
 
-    impl<T: AsyncRead + Unpin> AsyncRead for FramedWriteImpl<T> {
+    impl<Io: AsyncRead + Unpin, Buf> AsyncRead for FramedWriteImpl<Io, Buf> {
         fn poll_read(
             self: Pin<&mut Self>,
             cx: &mut Context<'_>,
@@ -277,11 +314,12 @@ mod if_async {
         }
     }
 
-    impl<T, I> Sink<I> for FramedWriteImpl<T>
+    impl<Fuse, Buf, Item> Sink<Item> for FramedWriteImpl<Fuse, Buf>
     where
-        T: AsyncWrite + Encoder<I> + Unpin,
+        Fuse: AsyncWrite + Encoder<Buf, Item> + Unpin,
+        Buf: Buffer,
     {
-        type Error = T::Error;
+        type Error = Fuse::Error;
 
         fn poll_ready(
             mut self: Pin<&mut Self>,
@@ -289,7 +327,8 @@ mod if_async {
         ) -> Poll<Result<(), Self::Error>> {
             let this = &mut *self;
             while this.buffer.len() >= this.high_water_mark {
-                let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, &this.buffer))?;
+                let num_write =
+                    ready!(Pin::new(&mut this.inner).poll_write(cx, this.buffer.as_slice()))?;
 
                 if num_write == 0 {
                     return Poll::Ready(Err(err_eof().into()));
@@ -301,24 +340,21 @@ mod if_async {
             Poll::Ready(Ok(()))
         }
 
-        fn start_send(mut self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
-            let this = &mut *self;
-            this.inner.encode(item, &mut this.buffer)
+        fn start_send(self: Pin<&mut Self>, item: Item) -> Result<(), Self::Error> {
+            let mut this = self.project();
+            this.inner.encode(item, this.buffer)
         }
 
         fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             let mut this = self.project();
-
             while !this.buffer.is_empty() {
-                let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, &this.buffer))?;
-
+                let num_write =
+                    ready!(Pin::new(&mut this.inner).poll_write(cx, this.buffer.as_slice()))?;
                 if num_write == 0 {
                     return Poll::Ready(Err(err_eof().into()));
                 }
-
                 this.buffer.advance(num_write);
             }
-
             this.inner.poll_flush(cx).map_err(Into::into)
         }
 

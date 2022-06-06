@@ -1,8 +1,10 @@
-use dencode::{BytesCodec, Framed};
+use dencode::Framed;
 use futures::{executor, io::Cursor, TryStreamExt};
 
+use crate::BytesCodec;
+
 #[test]
-fn decodes() {
+fn bytes_codec() {
     let mut buf = [0u8; 32];
     let expected = buf;
     let cur = Cursor::new(&mut buf[..]);

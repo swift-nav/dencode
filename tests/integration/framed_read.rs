@@ -4,8 +4,25 @@ use std::{
     task::{Context, Poll},
 };
 
-use dencode::{BytesCodec, BytesMut, Decoder, FramedRead, LinesCodec};
-use futures::{executor, stream::StreamExt, AsyncRead};
+use bytes::BytesMut;
+use dencode::{Decoder, FramedRead, LinesCodec};
+use futures::{executor, io::Cursor, stream::StreamExt, AsyncRead, TryStreamExt};
+
+use crate::BytesCodec;
+
+#[test]
+fn lines_codec() {
+    let buf = "Hello\nWorld\nError".to_owned();
+    let cur = Cursor::new(buf);
+
+    let mut framed = FramedRead::new(cur, LinesCodec {});
+    let next = executor::block_on(framed.try_next()).unwrap().unwrap();
+    assert_eq!(next, "Hello\n");
+    let next = executor::block_on(framed.try_next()).unwrap().unwrap();
+    assert_eq!(next, "World\n");
+
+    assert!(executor::block_on(framed.try_next()).is_err());
+}
 
 // Sends two lines at once, then nothing else forever
 struct MockBurstySender {
@@ -101,7 +118,7 @@ impl io::Read for OneByteAtATime<'_> {
 /// A decoder that only returns `a` characters from the input.
 struct AllTheAs;
 
-impl Decoder for AllTheAs {
+impl Decoder<BytesMut> for AllTheAs {
     type Item = char;
     type Error = io::Error;
 
