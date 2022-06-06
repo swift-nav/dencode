@@ -79,8 +79,8 @@ impl io::Write for WriteNull {
 fn line_write() {
     let curs = Cursor::new(vec![0u8; 16]);
     let mut framer = FramedWrite::new(curs, LinesCodec {});
-    executor::block_on(framer.send("Hello\n")).unwrap();
-    executor::block_on(framer.send("World\n")).unwrap();
+    executor::block_on(framer.send("Hello")).unwrap();
+    executor::block_on(framer.send("World")).unwrap();
     let (curs, _) = framer.release();
     assert_eq!(&curs.get_ref()[0..12], b"Hello\nWorld\n");
     assert_eq!(curs.position(), 12);
@@ -90,8 +90,8 @@ fn line_write() {
 fn blocking_line_write() {
     let curs = std::io::Cursor::new(vec![0u8; 16]);
     let mut framer = FramedWrite::new(curs, LinesCodec {});
-    framer.send("Hello\n").unwrap();
-    framer.send("World\n").unwrap();
+    framer.send("Hello").unwrap();
+    framer.send("World").unwrap();
     let (curs, _) = framer.release();
     assert_eq!(&curs.get_ref()[0..12], b"Hello\nWorld\n");
     assert_eq!(curs.position(), 12);

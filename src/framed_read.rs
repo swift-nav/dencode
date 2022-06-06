@@ -13,16 +13,15 @@ pin_project_lite::pin_project! {
     ///
     /// # Example
     /// ```
-    /// use bytes::Bytes;
-    /// use dencode::{BytesCodec, FramedRead};
+    /// use dencode::{LinesCodec, FramedRead};
     /// use futures::TryStreamExt;
     ///
-    /// let buf = [3u8; 3];
-    /// let mut framed = FramedRead::new(&buf[..], BytesCodec {});
+    /// let buf = b"hello\n";
+    /// let mut framed = FramedRead::new(&buf[..], LinesCodec {});
     ///
     /// # futures::executor::block_on(async move {
-    /// if let Some(bytes) = framed.try_next().await? {
-    ///     assert_eq!(bytes, Bytes::copy_from_slice(&buf[..]));
+    /// if let Some(line) = framed.try_next().await? {
+    ///     assert_eq!(line, "hello\n");
     /// }
     /// # Ok::<_, std::io::Error>(())
     /// # }).unwrap();
@@ -38,16 +37,15 @@ pin_project_lite::pin_project! {
 ///
 /// # Example
 /// ```
-/// use bytes::Bytes;
-/// use dencode::{BytesCodec, FramedRead};
+/// use dencode::{FramedRead, LinesCodec};
 /// use futures::TryStreamExt;
 ///
-/// let buf = [3u8; 3];
-/// let mut framed = FramedRead::new(&buf[..], BytesCodec {});
+/// let buf = [104, 101, 108, 108, 111, 10];
+/// let mut framed = FramedRead::new(&buf[..], LinesCodec {});
 ///
 /// # futures::executor::block_on(async move {
-/// if let Some(bytes) = framed.try_next().await? {
-///     assert_eq!(bytes, Bytes::copy_from_slice(&buf[..]));
+/// if let Some(line) = framed.try_next().await? {
+///     assert_eq!(line, "hello\n");
 /// }
 /// # Ok::<_, std::io::Error>(())
 /// # }).unwrap();

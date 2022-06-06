@@ -16,20 +16,19 @@ pin_project_lite::pin_project! {
     /// # Example
     /// ```
     /// use bytes::Bytes;
-    /// use dencode::{BytesCodec, Framed};
+    /// use dencode::{LinesCodec, Framed};
     /// use futures::{io::Cursor, SinkExt, TryStreamExt};
     ///
     /// # futures::executor::block_on(async move {
-    /// let cur = Cursor::new(vec![0u8; 12]);
-    /// let mut framed = Framed::new(cur, BytesCodec {});
+    /// let cur = Cursor::new(vec![0u8; 6]);
+    /// let mut framed = Framed::new(cur, LinesCodec {});
     ///
-    /// // Send bytes to `buf` through the `BytesCodec`
-    /// let bytes = Bytes::from("Hello world!");
-    /// framed.send(bytes).await?;
+    /// let item = "hello";
+    /// framed.send(item).await?;
     ///
     /// // Release the I/O and codec
     /// let (cur, _) = framed.release();
-    /// assert_eq!(cur.get_ref(), b"Hello world!");
+    /// assert_eq!(cur.get_ref(), b"hello\n");
     /// # Ok::<_, std::io::Error>(())
     /// # }).unwrap();
     /// ```
@@ -46,11 +45,11 @@ pin_project_lite::pin_project! {
 /// # Example
 /// ```
 /// use bytes::Bytes;
-/// use dencode::{BytesCodec, Framed};
+/// use dencode::{Framed, LinesCodec};
 /// use futures::{io::Cursor, SinkExt, TryStreamExt};
 ///
 /// # futures::executor::block_on(async move {
-/// let cur = Cursor::new(vec![0u8; 12]);
+/// let cur = Cursor::new(vec![0u8; 6]);
 /// let mut framed = Framed::new(cur, BytesCodec {});
 ///
 /// // Send bytes to `buf` through the `BytesCodec`

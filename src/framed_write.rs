@@ -16,18 +16,17 @@ pin_project_lite::pin_project! {
     ///
     /// # Example
     /// ```
-    /// use bytes::Bytes;
-    /// use dencode::{BytesCodec, FramedWrite};
+    /// use dencode::{LinesCodec, FramedWrite};
     /// use futures::SinkExt;
     ///
     /// # futures::executor::block_on(async move {
     /// let mut buf = Vec::new();
-    /// let mut framed = FramedWrite::new(&mut buf, BytesCodec {});
+    /// let mut framed = FramedWrite::new(&mut buf, LinesCodec {});
     ///
-    /// let bytes = Bytes::from("Hello World!");
-    /// framed.send(bytes.clone()).await?;
+    /// let item = "hello";
+    /// framed.send(item).await?;
     ///
-    /// assert_eq!(&buf[..], &bytes[..]);
+    /// assert_eq!(&buf[..], "hello\n".as_bytes());
     /// # Ok::<_, std::io::Error>(())
     /// # }).unwrap();
     /// ```
@@ -42,18 +41,17 @@ pin_project_lite::pin_project! {
 ///
 /// # Example
 /// ```
-/// use bytes::Bytes;
-/// use dencode::{BytesCodec, FramedWrite};
+/// use dencode::{FramedWrite, LinesCodec};
 /// use futures::SinkExt;
 ///
 /// # futures::executor::block_on(async move {
 /// let mut buf = Vec::new();
-/// let mut framed = FramedWrite::new(&mut buf, BytesCodec {});
+/// let mut framed = FramedWrite::new(&mut buf, LinesCodec {});
 ///
-/// let bytes = Bytes::from("Hello World!");
-/// framed.send(bytes.clone()).await?;
+/// let item = "hello";
+/// framed.send(item).await?;
 ///
-/// assert_eq!(&buf[..], &bytes[..]);
+/// assert_eq!(&buf[..], "hello\n".as_bytes());
 /// # Ok::<_, std::io::Error>(())
 /// # }).unwrap();
 /// ```
