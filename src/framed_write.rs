@@ -341,7 +341,7 @@ mod futures_impl {
 
         fn start_send(self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
             let mut this = self.project();
-            this.inner.encode(item, &mut this.buffer)
+            this.inner.encode(item, this.buffer)
         }
 
         fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {

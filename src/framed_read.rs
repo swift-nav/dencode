@@ -273,7 +273,7 @@ mod futures_impl {
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             let mut this = self.project();
 
-            if let Some(item) = this.inner.decode(&mut this.buffer)? {
+            if let Some(item) = this.inner.decode(this.buffer)? {
                 return Poll::Ready(Some(Ok(item)));
             }
 
@@ -285,13 +285,13 @@ mod futures_impl {
 
                 let ended = n == 0;
 
-                match this.inner.decode(&mut this.buffer)? {
+                match this.inner.decode(this.buffer)? {
                     Some(item) => return Poll::Ready(Some(Ok(item))),
                     None if ended => {
                         if this.buffer.is_empty() {
                             return Poll::Ready(None);
                         } else {
-                            match this.inner.decode_eof(&mut this.buffer)? {
+                            match this.inner.decode_eof(this.buffer)? {
                                 Some(item) => return Poll::Ready(Some(Ok(item))),
                                 None if this.buffer.is_empty() => return Poll::Ready(None),
                                 None => {
