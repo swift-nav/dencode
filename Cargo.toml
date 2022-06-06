@@ -22,10 +22,10 @@ futures = ["futures-core", "futures-io", "futures-sink", "pin-project-lite"]
 [dependencies]
 bitvec = { version = "1", optional = true }
 bytes = { version = "1", optional = true }
-futures-core = { version = "0.3.21", optional = true }
-futures-io = { version = "0.3.21", optional = true }
+futures-core = { version = "0.3", optional = true }
+futures-io = { version = "0.3", optional = true }
 futures-sink = { version = "0.3", optional = true }
-pin-project-lite = { version = "0.2.9", optional = true }
+pin-project-lite = { version = "0.2", optional = true }
 
 [dev-dependencies]
 bitvec = "1"
